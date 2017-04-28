@@ -478,14 +478,14 @@ class Manticore(object):
 
         # Imported straight from __main__.py; this will be re-written once the new
         # event code is in place.
-        from . import core.cpu
+        from .core import cpu
         import importlib
         from . import models
 
         with open(path, 'r') as fnames:
             for line in fnames.readlines():
                 address, cc_name, name = line.strip().split(' ')
-                cc = getattr(core.cpu.x86.ABI, cc_name)
+                cc = getattr(cpu.x86.ABI, cc_name)
                 fmodel = models
                 name_parts = name.split('.')
                 importlib.import_module(".models.{}".format(name_parts[0]), 'manticore')
