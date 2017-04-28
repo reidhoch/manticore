@@ -302,7 +302,7 @@ class Cpu(object):
         if size is None:
             size = self.address_bit_size
         assert size in SANE_SIZES
-        self.memory[where:where+size/8] = [Operators.CHR(Operators.EXTRACT(expr, offset, 8)) for offset in xrange(0, size, 8)]
+        self.memory[where:where+size/8] = [Operators.CHR(Operators.EXTRACT(expr, offset, 8)) for offset in range(0, size, 8)]
 
     def read_int(self, where, size=None):
         '''
@@ -318,7 +318,7 @@ class Cpu(object):
         assert size in SANE_SIZES
         data = self.memory[where:where+size/8]
         total_size = 8 * len(data)
-        value = Operators.CONCAT(total_size, *map(Operators.ORD, reversed(data)))
+        value = Operators.CONCAT(total_size, *list(map(Operators.ORD, reversed(data))))
         return value
 
 
@@ -330,7 +330,7 @@ class Cpu(object):
         :param data: data to write
         :type data: str or list
         '''
-        for i in xrange(len(data)):
+        for i in range(len(data)):
             self.write_int( where+i, Operators.ORD(data[i]), 8)
 
     def read_bytes(self, where, size):
@@ -343,7 +343,7 @@ class Cpu(object):
         :rtype: list[int or Expression]
         '''
         result = []
-        for i in xrange(size):
+        for i in range(size):
             result.append(Operators.CHR(self.read_int( where+i, 8)))
         return result
 
@@ -373,7 +373,7 @@ class Cpu(object):
         text = ''
         try:
             # check access_ok
-            for i in xrange(0, self.max_instr_width):
+            for i in range(0, self.max_instr_width):
                 c = self.memory[pc+i]
                 if issymbolic(c):
                     assert isinstance(c, BitVec) and  c.size == 8
@@ -416,7 +416,7 @@ class Cpu(object):
 
     def execute(self):
         ''' Decode, and execute one instruction pointed by register PC'''
-        if not isinstance(self.PC, (int,long)):
+        if not isinstance(self.PC, int):
             raise SymbolicPCException()
 
         if not self.memory.access_ok(self.PC,'x'):
@@ -483,7 +483,7 @@ class Cpu(object):
             if issymbolic(value):
                 aux = "%3s: "%reg_name +"%16s"%value
                 result += aux
-            elif isinstance(value, (int, long)):
+            elif isinstance(value, int):
                 result += "%3s: 0x%016x"%(reg_name, value)
             else:
                 result += "%3s: %r"%(reg_name, value)

@@ -12,6 +12,7 @@ setup(
         'pyelftools',
         'unicorn',
         'ply',
+        'six',
     ],
     extras_require={
         'dev': [

@@ -1,5 +1,5 @@
-from expression import BitVecVariable, BoolVariable, ArrayVariable, Array, Bool, BitVec, BitVecConstant, BoolConstant, ArrayProxy
-from visitors import GetDeclarations, TranslatorSmtlib, ArithmeticSimplifier, PrettyPrinter, pretty_print, translate_to_smtlib, get_depth, get_variables, arithmetic_simplifier
+from .expression import BitVecVariable, BoolVariable, ArrayVariable, Array, Bool, BitVec, BitVecConstant, BoolConstant, ArrayProxy
+from .visitors import GetDeclarations, TranslatorSmtlib, ArithmeticSimplifier, PrettyPrinter, pretty_print, translate_to_smtlib, get_depth, get_variables, arithmetic_simplifier
 import logging, weakref
 logger = logging.getLogger('SMT')
 
@@ -75,7 +75,7 @@ class ConstraintSet(object):
         added = True
         while added:
             added = False
-            logger.debug('Related variables %r', map(lambda x: x.name, related_variables))
+            logger.debug('Related variables %r', [x.name for x in related_variables])
             for constraint in list(remaining_constraints):
                 variables = get_variables(constraint)
                 if related_variables & variables:

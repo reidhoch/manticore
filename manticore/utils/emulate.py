@@ -169,7 +169,7 @@ class UnicornEmulator(object):
                 size, perms = self._should_be_mapped[base]
                 self._emu.mem_map(base, size, perms)
 
-            for address, values in self._should_be_written.items():
+            for address, values in list(self._should_be_written.items()):
                 for offset, byte in enumerate(values, start=address):
                     if issymbolic(byte):
                         from ..core.cpu.abstractcpu import ConcretizeMemory

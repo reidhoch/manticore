@@ -1,11 +1,10 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
-from expression import *
+from .expression import *
 import logging
 logger = logging.getLogger("VISITOR")
 
 
-class Visitor(object):
-    __metaclass__ = ABCMeta
+class Visitor(object, metaclass=ABCMeta):
     ''' Class/Type Visitor
 
        Inherit your class visitor from this one and get called on a different
@@ -73,7 +72,7 @@ class Visitor(object):
                 self.push(cache[node])
             elif isinstance(node, Operation):
                 if node in visited:
-                    operands = [self.pop() for _ in xrange(len(node.operands))]
+                    operands = [self.pop() for _ in range(len(node.operands))]
                     value = self._method(node, *operands)
                     visited.remove(node)
                     self.push(value)
@@ -218,7 +217,7 @@ class ConstantFolderSimplifier(Visitor):
                 isinstance(expression, Bool)
                 return BoolConstant(value, taint=expression.taint)
         else:
-            if any( operands[i] is not expression.operands[i] for i in xrange(len(operands))):
+            if any( operands[i] is not expression.operands[i] for i in range(len(operands))):
                 expression = type(expression)(*operands, taint=expression.taint)
         return expression
 
@@ -327,7 +326,7 @@ class ArithmeticSimplifier(Visitor):
                         new_operands.append(item)
                     bitcount += item.size
             if begining != expression.begining:
-                return BitVecExtract(BitVecConcat(sum(map(lambda x: x.size, new_operands)), *reversed(new_operands)), begining, expression.size, taint=expression.taint)
+                return BitVecExtract(BitVecConcat(sum([x.size for x in new_operands]), *reversed(new_operands)), begining, expression.size, taint=expression.taint)
         
     def visit_BitVecAdd(self, expression, *operands):
         ''' a + 0  ==> a
@@ -529,7 +528,7 @@ class TranslatorSmtlib(Visitor):
         for x in zip(expression.operands, operands):
             self._add_binding(*x)
 
-        operands = map(lambda x: self._add_binding(*x), zip(expression.operands, operands))
+        operands = [self._add_binding(*x) for x in zip(expression.operands, operands)]
         smtlib = '(%s %s)' % (operation, ' '.join(operands))
         return smtlib
 

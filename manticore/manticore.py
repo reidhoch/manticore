@@ -19,7 +19,7 @@ from .core.executor import Executor
 from .core.state import State, AbandonState
 from .core.parser import parse
 from .core.smtlib import solver, Expression, Operators, SolverException, Array, ConstraintSet
-from core.smtlib import BitVec, Bool
+from .core.smtlib import BitVec, Bool
 from .models import linux, decree, windows
 from .utils.helpers import issymbolic
 
@@ -97,7 +97,7 @@ def makeWindows(args):
     symb = constraints.new_array(name='RAWMSG', index_max=size)
 
     model.current.write_bytes(data_ptr + offset, concrete_data)
-    model.current.write_bytes(data_ptr + offset + len(concrete_data), [symb[i] for i in xrange(size)] )
+    model.current.write_bytes(data_ptr + offset + len(concrete_data), [symb[i] for i in range(size)] )
 
     logger.debug('First %d bytes are left concrete', offset)
     logger.debug('followed by %d bytes of concrete start', len(concrete_data))
@@ -178,7 +178,7 @@ class Manticore(object):
         # XXX(yan) This is a bit obtuse; once PE support is updated this should
         # be refactored out
         if self._binary_type == 'ELF':
-            self._binary_obj = ELFFile(file(self._binary))
+            self._binary_obj = ELFFile(open(self._binary))
 
         self._init_logging()
 
@@ -310,7 +310,7 @@ class Manticore(object):
         :type pc: int or None
         :param callable callback: Hook function
         '''
-        if not (isinstance(pc, (int, long)) or pc is None):
+        if not (isinstance(pc, int) or pc is None):
             raise TypeError("pc must be either an int or None, not {}".format(pc.__class__.__name__))
         else:
             self._hooks.setdefault(pc, set()).add(callback)
@@ -335,7 +335,7 @@ class Manticore(object):
     def _make_state(self, path):
         if self._binary_type == 'ELF':
             # Linux
-            env = ['%s=%s'%(k,v) for k,v in self._env.items()]
+            env = ['%s=%s'%(k,v) for k,v in list(self._env.items())]
             state = makeLinux(self._binary, self._argv, env, self._concrete_data)
         elif self._binary_type == 'PE':
             # Windows
@@ -460,7 +460,7 @@ class Manticore(object):
             w = self._workers.pop()
             try:
                 w.join()
-            except KeyboardInterrupt, e:
+            except KeyboardInterrupt as e:
                 self._executor.shutdown()
                 # multiprocessing.dummy.Process does not support terminate
                 if hasattr(w, 'terminate'):
@@ -478,9 +478,9 @@ class Manticore(object):
 
         # Imported straight from __main__.py; this will be re-written once the new
         # event code is in place.
-        import core.cpu
+        from . import core.cpu
         import importlib
-        import models
+        from . import models
 
         with open(path, 'r') as fnames:
             for line in fnames.readlines():
@@ -530,7 +530,7 @@ class Manticore(object):
         replay=None
         if hasattr(args, 'replay') and args.replay is not None:
             with open(args.replay, 'r') as freplay:
-                replay = map(lambda x: int(x, 16), freplay.readlines())
+                replay = [int(x, 16) for x in freplay.readlines()]
 
         state = self._make_state(self._binary)
 
@@ -581,7 +581,7 @@ class Manticore(object):
         if pc not in self._assertions:
             return
 
-        from core.parser import parse
+        from .core.parser import parse
 
         program = self._assertions[pc]
 
@@ -603,7 +603,7 @@ class Manticore(object):
         # Ignore symbolic pc.
         # TODO(yan): Should we ask the solver if any of the hooks are possible,
         # and execute those that are?
-        if not isinstance(pc, (int, long)):
+        if not isinstance(pc, int):
             return
 
         # Invoke all pc-specific hooks
@@ -637,9 +637,9 @@ class Manticore(object):
         logger.info('IPS: %d', self._executor.count/(time.time()-self._time_started))
 
         visited = ['%d:%08x'%site for site in self._executor.visited]
-        with file(os.path.join(self.workspace,'visited.txt'),'w') as f:
+        with open(os.path.join(self.workspace,'visited.txt'),'w') as f:
             for entry in sorted(visited):
                 f.write(entry + '\n')
 
-        with file(os.path.join(self.workspace,'command.sh'),'w') as f:
+        with open(os.path.join(self.workspace,'command.sh'),'w') as f:
             f.write(' '.join(sys.argv))

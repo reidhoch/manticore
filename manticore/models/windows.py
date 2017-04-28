@@ -1,4 +1,4 @@
-import cgcrandom
+from . import cgcrandom
 import weakref
 import sys, os, struct
 from ..core.memory import Memory, MemoryException, SMemory32, Memory32
@@ -13,10 +13,9 @@ from ..utils.helpers import issymbolic
 from ..binary.pe import minidump
 
 from contextlib import closing
-import StringIO
 import logging
 import random
-from windows_syscalls import syscalls_num
+from .windows_syscalls import syscalls_num
 logger = logging.getLogger("MODEL")
 
 class ProcessExit(Exception):
@@ -78,7 +77,7 @@ class Windows(object):
         md = minidump.MiniDump(path)
         assert md.get_architecture() == "x86"
 
-        major, minor = map(int, md.version.split(' ')[0].split('.'))
+        major, minor = list(map(int, md.version.split(' ')[0].split('.')))
         if major == 6:
             self.flavor = "Windows7SP%d"%minor
             if minor >= 2:
@@ -123,7 +122,7 @@ class Windows(object):
 
 
         if (additional_context and 'memory' in additional_context):
-            for address, value in additional_context['memory'].iteritems():
+            for address, value in list(additional_context['memory'].items()):
                 t = iter(value.encode('hex'))
                 decoded = " ".join(a+b for a,b in zip(t, t))
                 logger.info('Overwriting memory at {:#08x} with bytes {}'.format(address, decoded))
@@ -131,7 +130,7 @@ class Windows(object):
                     memory.write(address, value)
                 except MemoryException as e:
                     logger.info('Memory overwrite failed: {}'.format(e))
-        logger.info('Total memory used: %d bytes', sum([size for (_, size) in query.values()]))
+        logger.info('Total memory used: %d bytes', sum([size for (_, size) in list(query.values())]))
 
         selectedThreadId = md.get_threads()[0].ThreadId
         exc = md.get_exception_info()
@@ -159,7 +158,7 @@ class Windows(object):
             cpu.EDI=cxt.Edi
             cpu.FS=cxt.SegFs
             if (additional_context and 'registers' in additional_context):
-                for name, value in additional_context['registers'].iteritems():
+                for name, value in list(additional_context['registers'].items()):
                     setattr(cpu, name, value)
                     logger.info('Overriding register {} with new value {:#x}'.format(name, value)) #DEBUG
 
@@ -215,7 +214,7 @@ class Windows(object):
         :todo: FIX. move to cpu or memory 
         """
         filename = ""
-        for i in xrange(0,1024):
+        for i in range(0,1024):
             c = Operators.CHR(cpu.read_int(buf+i,8))
             if c == '\x00':
                 break
@@ -281,8 +280,8 @@ class Windows(object):
             raise SyscallNotImplemented("32 bit %s WINDOWS system call number %s (%s) Not Implemented" % (self.flavor, cpu.EAX, syscall_name))
         func = getattr(self, syscall_name)
 
-        logger.debug("SYSCALL32: %s (nargs: %d)", func.func_name, func.func_code.co_argcount)
-        nargs = func.func_code.co_argcount
+        logger.debug("SYSCALL32: %s (nargs: %d)", func.__name__, func.__code__.co_argcount)
+        nargs = func.__code__.co_argcount
         args = [ ]
         for i in range(nargs-1):
             args.append(cpu.read_int(cpu.EDX+(i+2)*4, 32))

@@ -4,11 +4,11 @@ import argparse
 import logging
 import time
 import types
-import cPickle
+from six.moves import cPickle
 from multiprocessing import Manager, Pool, Process
 from threading import Timer
-from core.smtlib import Expression
-from manticore import Manticore
+from .core.smtlib import Expression
+from .manticore import Manticore
 try:
     import psutil
 except ImportError:

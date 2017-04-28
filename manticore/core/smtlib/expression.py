@@ -1,5 +1,7 @@
 import operator
 import weakref
+from six.moves import reduce
+from functools import reduce
 
 class Expression(object):
     ''' Abstract taintable Expression. '''
@@ -40,7 +42,7 @@ class Constant(Expression):
     def __init__(self, value, *args, **kwargs):
         if self.__class__ is Constant:
             raise TypeError
-        assert isinstance(value, (bool, int, long))
+        assert isinstance(value, (bool, int))
         super(Constant, self).__init__(*args, **kwargs)
         self._value = value
 
@@ -77,7 +79,7 @@ class Bool(Expression):
     def cast(self, value, **kwargs):
         if isinstance(value, Bool):
             return value
-        assert isinstance(value, (int, long, bool))
+        assert isinstance(value, (int, bool))
         return BoolConstant(bool(value), **kwargs)
 
     def __cmp__(self, *args):
@@ -110,7 +112,7 @@ class Bool(Expression):
     def __rxor__(self, other):
         return BoolXor(self.cast(other), self)
 
-    def __nonzero__(self):
+    def __bool__(self):
         raise NotImplementedError("__nonzero__ for Bool")
 
 class BoolVariable(Bool, Variable):
@@ -127,7 +129,7 @@ class BoolConstant(Bool, Constant):
         assert isinstance(value, bool)
         super(BoolConstant, self).__init__(value, *args, **kwargs)
 
-    def __nonzero__(self):
+    def __bool__(self):
         return self.value
 
 
@@ -192,7 +194,7 @@ class BitVec(Expression):
             return value
         if isinstance(value, str) and len(value) == 1:
             value = ord(value)
-        assert isinstance(value, (int, long, bool))
+        assert isinstance(value, (int, bool))
         # FIXME? Assert it fits in the representation
         return BitVecConstant(self.size, value, **kwargs)
 
@@ -368,10 +370,10 @@ class BitVecVariable(BitVec, Variable):
 
 class BitVecConstant(BitVec, Constant):
     def __init__(self, size, value, *args, **kwargs):
-        assert isinstance(value, (int, long))
+        assert isinstance(value, int)
         super(BitVecConstant, self).__init__(size, value, *args, **kwargs)
 
-    def __nonzero__(self):
+    def __bool__(self):
         return self.value != 0
 
 
@@ -533,7 +535,7 @@ class Array(Expression):
         super(Array, self).__init__(*operands, **kwargs)
 
     def cast_index(self, index):
-        if isinstance(index, (int, long)):
+        if isinstance(index, int):
             assert self.index_max is None or index >= 0 and index < self.index_max
             return BitVecConstant(self._index_bits, index)
         assert isinstance(index, BitVec) and index.size == self._index_bits
@@ -542,7 +544,7 @@ class Array(Expression):
     def cast_value(self, value):
         if isinstance(value, str) and len(value) == 1:
             value = ord(value)
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             return BitVecConstant(8, value)
         assert isinstance(value, BitVec) and value.size == 8
         return value
@@ -626,7 +628,7 @@ class ArrayProxy(ArrayVariable):
     def _get_size(self, index):
         size = index.stop - index.start
         if isinstance(size, BitVec):
-            import visitors
+            from . import visitors
             size = visitors.ArithmeticSimplifier(expression=size)
         else:
             size = BitVecConstant(self._array.index_bits, size)
@@ -636,7 +638,7 @@ class ArrayProxy(ArrayVariable):
     def __getitem__(self, index):
         if isinstance(index, slice):
             size = self._get_size(index)
-            return [self._array.select(index.start+i) for i in xrange(size)]
+            return [self._array.select(index.start+i) for i in range(size)]
         else:
             return self._array.select(index)
 
@@ -644,7 +646,7 @@ class ArrayProxy(ArrayVariable):
         if isinstance(index, slice):
             size = self._get_size(index)
             assert len(value) == size
-            for i in xrange(size):
+            for i in range(size):
                 self.store(index.start+i, value[i])
         else:
             self.store(index, value)
@@ -682,7 +684,7 @@ class BitVecSignExtend(BitVecOperation):
 class BitVecZeroExtend(BitVecOperation):
     def __init__(self, size_dest, operand, *args, **kwargs):
         assert isinstance(operand, BitVec)
-        assert isinstance(size_dest, (int, long))
+        assert isinstance(size_dest, int)
         assert size_dest >= operand.size
         super(BitVecZeroExtend, self).__init__(size_dest, operand, *args, **kwargs)
         self.extend = size_dest-operand.size
@@ -690,8 +692,8 @@ class BitVecZeroExtend(BitVecOperation):
 
 class BitVecExtract(BitVecOperation):
     def __init__(self, operand, offset, size, *args, **kwargs):
-        assert isinstance(offset, (int, long))
-        assert isinstance(size, (int, long))
+        assert isinstance(offset, int)
+        assert isinstance(size, int)
         assert offset >= 0 and offset + size <= operand.size
         super(BitVecExtract, self).__init__(size, operand, *args, **kwargs)
         self.begining = offset
@@ -701,8 +703,8 @@ class BitVecExtract(BitVecOperation):
 class BitVecConcat(BitVecOperation):
     def __init__(self, size_dest, *operands, **kwargs):
         assert isinstance(size_dest, int)
-        assert all(map(lambda x: isinstance(x, BitVec), operands))
-        assert size_dest == sum(map(lambda x: x.size, operands))
+        assert all([isinstance(x, BitVec) for x in operands])
+        assert size_dest == sum([x.size for x in operands])
         super(BitVecConcat, self).__init__(size_dest, *operands, **kwargs)
 
 

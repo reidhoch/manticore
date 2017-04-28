@@ -1,5 +1,5 @@
 import sys, os, struct
-import StringIO
+from six.moves import StringIO
 import logging
 import random
 from ..core.smtlib import solver, Expression, Operators
@@ -19,15 +19,15 @@ def _memset_range(cpu, dst, value, rng):
 
     if minval == maxval:
         # no range, just write N elements
-        for i in xrange(0, maxval):
+        for i in range(0, maxval):
             cpu.write_int(dst+i, value, 8)
     else:
         # up to minval doesn't depend on range
-        for i in xrange(0, minval):
+        for i in range(0, minval):
             cpu.write_int(dst+i, value, 8)
 
         # write range dependent values
-        for i in xrange(minval, maxval):
+        for i in range(minval, maxval):
             cur_v = cpu.read_int(dst+i, 8)
             cpu.write_int(dst+i, Operators.ITEBV(8, symb_size >= i, value, cur_v), 8)
 
@@ -38,7 +38,7 @@ def _memmove_range(cpu, dst, src, rng):
     minval, maxval, symb_size = rng
 
     # read source bytes
-    src_bytes = [cpu.read_int(src+i, 8) for i in xrange(0, maxval)]
+    src_bytes = [cpu.read_int(src+i, 8) for i in range(0, maxval)]
 
     if minval == maxval:
         # no range, just write N elements
@@ -46,11 +46,11 @@ def _memmove_range(cpu, dst, src, rng):
             cpu.write_int(dst+i, b, 8)
     else:
         # up to minval doesn't depend on range
-        for i in xrange(0, minval):
+        for i in range(0, minval):
             cpu.write_int(dst+i, src_bytes[i], 8)
 
         # write range dependent values
-        for i in xrange(minval, maxval):
+        for i in range(minval, maxval):
             cur_v = cpu.read_int(dst+i, 8)
             cpu.write_int(dst+i, Operators.ITEBV(8, symb_size >= i, src_bytes[i], cur_v), 8)
 
@@ -136,7 +136,7 @@ class strings(object):
                 break
             s.append(value)
 
-        for i in xrange(len(s)):
+        for i in range(len(s)):
             cpu.write_int(dst+i, s[i], 8)
 
 class heap(object):

@@ -40,7 +40,7 @@ class Signal(object):
                     continue
             results.append(f(*args, **kwargs))
 
-        for obj, funcs in self._methods.items():
+        for obj, funcs in list(self._methods.items()):
             for f in funcs:
                 if '__predicate__' in f.__dict__:
                     if not f.__dict__['__predicate__']():

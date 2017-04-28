@@ -1,8 +1,9 @@
+
 import sys
 import time
 import os
 import copy
-import cPickle
+from six.moves import cPickle
 import cProfile
 import random
 import logging
@@ -11,9 +12,9 @@ import traceback
 import signal
 import weakref
 try:
-    import cStringIO as StringIO
+    import io as StringIO
 except:
-    import StringIO
+    import io
 from math import ceil, log
 
 from ..utils.nointerrupt import DelayedKeyboardInterrupt
@@ -79,7 +80,7 @@ class ProfilingResults(object):
         self.loading_time = 0
         self.saving_time = 0
         self.solver_time = 0
-        for (func_file, _, func_name), (_, _, _, func_time, _) in raw_stats.stats.iteritems():
+        for (func_file, _, func_name), (_, _, _, func_time, _) in list(raw_stats.stats.items()):
             if func_name == '_getState':
                 self.loading_time += func_time
             elif func_name == '_putState':
@@ -221,7 +222,7 @@ class Executor(object):
 
     @dump_every.setter
     def dump_every(self, val):
-        assert(isinstance(val, (int, long)))
+        assert(isinstance(val, int))
         self._dump_every = val
 
     @sync
@@ -334,7 +335,7 @@ class Executor(object):
                 return pow(2, ceil(log(n)/log(2)) )
 
             count = 0
-            for branch, n in stat['branches'].items():
+            for branch, n in list(stat['branches'].items()):
                 count += (bucket(n) - n) / (bucket(n)/2)
 
             if count == 0 :
@@ -378,14 +379,14 @@ class Executor(object):
 
         #FIXME: move the metric to an external function and make it smooth.
         # It should estimate the likelihood to find a crash under this state
-        possible_states = list( sorted( self._states.items(), key = lambda (st_name,st_stat): metric(st_stat) ) )
-        logger.debug('Prioritizing metric %s %r', order, sorted(map(metric, self._states.values() ) ) )
+        possible_states = list( sorted( list(self._states.items()), key = lambda st_name_st_stat: metric(st_name_st_stat[1]) ) )
+        logger.debug('Prioritizing metric %s %r', order, sorted(map(metric, list(self._states.values()) ) ) )
 
 
         if policy == 'bucket':
             logger.info("Metric: bucket")
 
-            for st_name, st_stat in sorted( self._states.items(), key = lambda (st_name,st_stat): metric(st_stat) ):
+            for st_name, st_stat in sorted( list(self._states.items()), key = lambda st_name_st_stat1: metric(st_name_st_stat1[1]) ):
                 brs = st_stat['branches']
                 vals = []
                 for branch in self._all_branches:
@@ -445,14 +446,14 @@ class Executor(object):
         logger.debug("saved in %d seconds", time.time() - start)
 
         # Summarize state
-        output = StringIO.StringIO()
+        output = io.StringIO()
         memories = set()
 
         output.write("Command line:\n  " + ' '.join(sys.argv) + '\n')
         output.write('Status:\n  {}\n'.format(message))
         output.write('\n')
 
-        for cpu in filter(None, state.model.procs):
+        for cpu in [_f for _f in state.model.procs if _f]:
             idx = state.model.procs.index(cpu)
             output.write("================ PROC: %02d ================\n"%idx)
 
@@ -487,9 +488,9 @@ class Executor(object):
         assert solver.check(state.constraints)
         for symbol in state.input_symbols:
             buf = solver.get_value(state.constraints, symbol)
-            file(self._getFilename('test_%08x.txt'%test_number),'a').write("%s: %s\n"%(symbol.name, repr(buf)))
+            open(self._getFilename('test_%08x.txt'%test_number),'a').write("%s: %s\n"%(symbol.name, repr(buf)))
         
-        file(self._getFilename('test_%08x.syscalls'%test_number),'a').write(repr(state.model.syscall_trace))
+        open(self._getFilename('test_%08x.syscalls'%test_number),'a').write(repr(state.model.syscall_trace))
 
         stdout = ''
         stderr = ''
@@ -498,8 +499,8 @@ class Executor(object):
                 stdout += ''.join(map(str, data))
             if sysname in ('_transmit', '_write') and fd == 2:
                 stderr += ''.join(map(str, data))
-        file(self._getFilename('test_%08x.stdout'%test_number),'a').write(stdout)
-        file(self._getFilename('test_%08x.stderr'%test_number),'a').write(stderr)
+        open(self._getFilename('test_%08x.stdout'%test_number),'a').write(stdout)
+        open(self._getFilename('test_%08x.stderr'%test_number),'a').write(stderr)
 
         # Save STDIN solution
         stdin_file = 'test_{:08x}.stdin'.format(test_number)
@@ -510,7 +511,7 @@ class Executor(object):
                         continue
                     for c in data:
                         f.write(chr(solver.get_value(state.constraints, c)))
-            except SolverException, e:
+            except SolverException as e:
                 f.seek(0)
                 f.write("{SolverException}\n")
                 f.truncate()
@@ -521,7 +522,7 @@ class Executor(object):
 
     def getTotalUsedStorage(self):
         #approximation
-        return sum(map(lambda x: x['filesize'], self._states))
+        return sum([x['filesize'] for x in self._states])
 
     def fork(self, current_state, symbolic, vals, setstate=None):
         '''
@@ -688,7 +689,7 @@ class Executor(object):
                     self.putState(current_state)
                     current_state = None
 
-                except AbandonState, e:
+                except AbandonState as e:
                     current_state = None
 
                 except ForkState as e:
@@ -787,7 +788,7 @@ class Executor(object):
                 except SolverException as e:
                     import traceback
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    print "*** print_exc:"
+                    print("*** print_exc:")
                     traceback.print_exc()
 
                     if solver.check(current_state.constraints):
@@ -812,7 +813,7 @@ class Executor(object):
                 for log in trace.splitlines():
                     logger.error(log)
                 if solver.check(current_state.constraints):
-                    if isinstance(current_state.cpu.PC, (int, long)):
+                    if isinstance(current_state.cpu.PC, int):
                         PC = "{:08x}".format(current_state.cpu.PC)
                     else:
                         PC = str(current_state.cpu.PC)
@@ -835,7 +836,7 @@ class Executor(object):
                 self._profile.disable()
                 self._profile.create_stats()
                 with self._lock:
-                     self._stats.append(self._profile.stats.items())
+                     self._stats.append(list(self._profile.stats.items()))
 
         return count
 

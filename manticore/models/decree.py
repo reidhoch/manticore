@@ -1,4 +1,4 @@
-import cgcrandom
+from . import cgcrandom
 import weakref
 import sys, os, struct
 # TODO use cpu factory
@@ -11,7 +11,7 @@ from ..utils.helpers import issymbolic
 from ..binary import CGCElf
 from ..binary import CGCGrr
 from contextlib import closing
-import StringIO
+from six.moves import StringIO
 import logging
 import random
 
@@ -57,7 +57,7 @@ class Socket(object):
     def receive(self, size):
         rx_bytes = min(size, len(self.buffer))
         ret = []
-        for i in xrange(rx_bytes):
+        for i in range(rx_bytes):
             ret.append(self.buffer.pop())
         return ret
 
@@ -131,14 +131,14 @@ class Decree(object):
         nprocs = len(self.procs)
         nfiles = len(self.files)
         assert nprocs > 0
-        self.running = range(nprocs)
+        self.running = list(range(nprocs))
         self._current = 0
 
         #Each process can wait for one timeout
         self.timers = [ None ] * nprocs
         #each fd has a waitlist
-        self.rwait = [set() for _ in xrange(nfiles)]
-        self.twait = [set() for _ in xrange(nfiles)]
+        self.rwait = [set() for _ in range(nfiles)]
+        self.twait = [set() for _ in range(nfiles)]
 
 
     def _mk_proc(self):
@@ -204,7 +204,7 @@ class Decree(object):
         :todo: FIX. move to cpu or memory 
         """
         filename = ""
-        for i in xrange(0,1024):
+        for i in range(0,1024):
             c = Operators.CHR(cpu.read_int(buf+i,8))
             if c == '\x00':
                 break
@@ -213,7 +213,7 @@ class Decree(object):
 
 
     def load(self, filename):
-        magic = file(filename).read(4)
+        magic = open(filename).read(4)
         if magic == '\x7fCGC':
             return self._load_cgc(filename)
         else:
@@ -315,7 +315,7 @@ class Decree(object):
                 cpu.memory.mprotect(lo, hi-lo, 'rw')
                 try:
                     cpu.memory[lo:hi] = '\x00' *(hi-lo)
-                except Exception, e:
+                except Exception as e:
                     logger.debug("Exception zeroing main elf fractional pages: %s"%str(e))
                 cpu.memory.mprotect(lo, hi, old_perms)
 
@@ -445,7 +445,7 @@ class Decree(object):
         perms = [ 'rw ', 'rwx'][bool(isX)]
         try:
             result = cpu.memory.mmap(None, length, perms)
-        except Exception, e:
+        except Exception as e:
             logger.info("ALLOCATE exception %s. Returning ENOMEM %r", str(e), length)
             return Decree.CGC_ENOMEM
         cpu.write_int(addr, result, 32)
@@ -479,7 +479,7 @@ class Decree(object):
                     logger.info("RANDOM: buf points to invalid address. Returning EFAULT")
                     return Decree.CGC_EFAULT
 
-                data = file("/dev/urandom","r").read(count)
+                data = open("/dev/urandom","r").read(count)
                 cpu.write_bytes(buf, data)
 
         # TODO check 4 bytes from rx_bytes
@@ -580,7 +580,7 @@ class Decree(object):
                 self.wait([],[fd],None)
                 raise RestartSyscall()
 
-            for i in xrange(0, count):
+            for i in range(0, count):
                 value = Operators.CHR(cpu.read_int(buf+i,8))
                 if not isinstance(value, str):
                     logger.debug("TRANSMIT: Writing symbolic values to file %d", fd)
@@ -757,11 +757,11 @@ class Decree(object):
                      0x00000006: self.sys_deallocate, 
                      0x00000007: self.sys_random,
                     }
-        if cpu.EAX not in syscalls.keys():
+        if cpu.EAX not in list(syscalls.keys()):
             raise SyscallNotImplemented("32 bit DECREE system call number %s Not Implemented" % cpu.EAX)
         func = syscalls[cpu.EAX]
-        logger.debug("SYSCALL32: %s (nargs: %d)", func.func_name, func.func_code.co_argcount)
-        nargs = func.func_code.co_argcount
+        logger.debug("SYSCALL32: %s (nargs: %d)", func.__name__, func.__code__.co_argcount)
+        nargs = func.__code__.co_argcount
         args = [ cpu, cpu.EBX, cpu.ECX, cpu.EDX, cpu.ESI, cpu.EDI, cpu.EBP ]
         cpu.EAX = func(*args[:nargs-1])
 
@@ -786,7 +786,7 @@ class Decree(object):
             logger.info("None running checking if there is some process waiting for a timeout")
             if all([x is None for x in self.timers]):
                 raise Deadlock()
-            self.clocks = min(filter(lambda x: x is not None, self.timers))+1
+            self.clocks = min([x for x in self.timers if x is not None])+1
             self.check_timers()
             assert len(self.running) != 0, "DEADLOCK!"
             self._current = self.running[0]
@@ -871,7 +871,7 @@ class Decree(object):
         ''' Awake proccess if timer has expired '''
         if self._current is None:
             #Advance the clocks. Go to future!!
-            advance = min(filter( lambda x: x is not None, self.timers)) +1
+            advance = min([x for x in self.timers if x is not None]) +1
             logger.info("Advancing the clock from %d to %d", self.clocks, advance)
             self.clocks = advance
         for procid in range(len(self.timers)):
@@ -894,7 +894,7 @@ class Decree(object):
             if self.clocks % 10000 == 0:
                 self.check_timers()
                 self.sched()
-        except Interruption, e:
+        except Interruption as e:
             if e.N != 0x80:
                 raise 
             try:
@@ -1036,7 +1036,7 @@ class SDecree(Decree):
             raise SymbolicSyscallArgument(2)
 
         data = []
-        for i in xrange(count):
+        for i in range(count):
             if False:
                 #Too slow for the new age.
                 value = self.constraints.new_bitvec(8, name="RANDOM_%04d"%self.random)

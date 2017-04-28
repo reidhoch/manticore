@@ -8,7 +8,7 @@ from ..smtlib import Operators, Expression, BitVecConstant
 from ...utils.helpers import issymbolic
 # from ..smtlib import *
 from functools import wraps
-from bitwise import *
+from .bitwise import *
 
 from capstone import *
 from capstone.arm import *
@@ -300,7 +300,7 @@ class Armv7Cpu(Cpu):
             instr2 commits all in _last_flags
             now overflow=1 even though it should still be 0
         '''
-        unupdated_flags = self._last_flags.viewkeys() - flags.viewkeys()
+        unupdated_flags = self._last_flags.keys() - flags.keys()
         for flag in unupdated_flags:
             flag_name = 'APSR_{}'.format(flag)
             self._last_flags[flag] = self.regfile.read(flag_name)
@@ -310,7 +310,7 @@ class Armv7Cpu(Cpu):
         # XXX: capstone incorrectly sets .update_flags for adc
         if self.instruction.mnemonic == 'adc':
             return
-        for flag, val in self._last_flags.iteritems():
+        for flag, val in list(self._last_flags.items()):
             flag_name = 'APSR_{}'.format(flag)
             self.regfile.write(flag_name, val)
 
@@ -348,7 +348,7 @@ class Armv7Cpu(Cpu):
 
     # TODO add to abstract cpu, and potentially remove stacksub/add from it?
     def stack_push(self, data, nbytes=None):
-        if isinstance(data, (int, long)):
+        if isinstance(data, int):
             nbytes = nbytes or self.address_bit_size/8
             self.SP -= nbytes
             self.write_int(self.SP, data, nbytes * 8)
@@ -657,7 +657,7 @@ class Armv7Cpu(Cpu):
         msb = cpu.address_bit_size - 1
         result = 32
 
-        for pos in xrange(cpu.address_bit_size):
+        for pos in range(cpu.address_bit_size):
             cond = Operators.EXTRACT(value, pos, 1) == 1
             result = Operators.ITEBV(cpu.address_bit_size, cond, msb-pos, result)
 

@@ -27,8 +27,9 @@ Misc variables:
 __version__ = "$Revision: 72223 $"       # Code version
 
 from types import *
-from copy_reg import dispatch_table
-from copy_reg import _extension_registry, _inverted_registry, _extension_cache
+from six.moves import copyreg as copy_reg
+from copyreg import dispatch_table
+from copyreg import _extension_registry, _inverted_registry, _extension_cache
 import marshal
 import sys
 import struct
@@ -519,22 +520,22 @@ class Pickler:
     if StringType is UnicodeType:
         # This is true for Jython
         def save_string(self, obj, pack=struct.pack):
-            unicode = obj.isunicode()
+            str = obj.isunicode()
 
             if self.bin:
-                if unicode:
+                if str:
                     obj = obj.encode("utf-8")
                 l = len(obj)
-                if l < 256 and not unicode:
+                if l < 256 and not str:
                     self.write(SHORT_BINSTRING + chr(l) + obj)
                 else:
                     s = pack("<i", l)
-                    if unicode:
+                    if str:
                         self.write(BINUNICODE + s + obj)
                     else:
                         self.write(BINSTRING + s + obj)
             else:
-                if unicode:
+                if str:
                     obj = obj.replace("\\", "\\u005c")
                     obj = obj.replace("\n", "\\u000a")
                     obj = obj.encode('raw-unicode-escape')
@@ -631,12 +632,12 @@ class Pickler:
                 write(APPEND)
             return
 
-        r = xrange(self._BATCHSIZE)
+        r = list(range(self._BATCHSIZE))
         while items is not None:
             tmp = []
             for i in r:
                 try:
-                    x = items.next()
+                    x = next(items)
                     tmp.append(x)
                 except StopIteration:
                     items = None
@@ -661,7 +662,7 @@ class Pickler:
             write(MARK + DICT)
 
         self.memoize(obj)
-        yield self._batch_setitems(obj.iteritems())
+        yield self._batch_setitems(iter(obj.items()))
 
     dispatch[DictionaryType] = save_dict
     if not PyStringMap is None:
@@ -679,12 +680,12 @@ class Pickler:
                 write(SETITEM)
             return
 
-        r = xrange(self._BATCHSIZE)
+        r = list(range(self._BATCHSIZE))
         while items is not None:
             tmp = []
             for i in r:
                 try:
-                    tmp.append(items.next())
+                    tmp.append(next(items))
                 except StopIteration:
                     items = None
                     break
@@ -826,7 +827,7 @@ def whichmodule(func, funcname):
     if func in classmap:
         return classmap[func]
 
-    for name, module in sys.modules.items():
+    for name, module in list(sys.modules.items()):
         if module is None:
             continue # skip dummy package entries
         if name != '__main__' and getattr(module, funcname, None) is func:
@@ -871,7 +872,7 @@ class Unpickler:
             while 1:
                 key = read(1)
                 dispatch[key](self)
-        except _Stop, stopinst:
+        except _Stop as stopinst:
             return stopinst.value
 
     # Return largest index k such that self.stack[k] is self.mark.
@@ -898,7 +899,7 @@ class Unpickler:
     def load_proto(self):
         proto = ord(self.read(1))
         if not 0 <= proto <= 2:
-            raise ValueError, "unsupported pickle protocol: %d" % proto
+            raise ValueError("unsupported pickle protocol: %d" % proto)
     dispatch[PROTO] = load_proto
 
     def load_persid(self):
@@ -933,7 +934,7 @@ class Unpickler:
             try:
                 val = int(data)
             except ValueError:
-                val = long(data)
+                val = int(data)
         self.append(val)
     dispatch[INT] = load_int
 
@@ -950,7 +951,7 @@ class Unpickler:
     dispatch[BININT2] = load_binint2
 
     def load_long(self):
-        self.append(long(self.readline()[:-1], 0))
+        self.append(int(self.readline()[:-1], 0))
     dispatch[LONG] = load_long
 
     def load_long1(self):
@@ -978,11 +979,11 @@ class Unpickler:
         for q in "\"'": # double or single quote
             if rep.startswith(q):
                 if len(rep) < 2 or not rep.endswith(q):
-                    raise ValueError, "insecure string pickle"
+                    raise ValueError("insecure string pickle")
                 rep = rep[len(q):-len(q)]
                 break
         else:
-            raise ValueError, "insecure string pickle"
+            raise ValueError("insecure string pickle")
         self.append(rep.decode("string-escape"))
     dispatch[STRING] = load_string
 
@@ -992,12 +993,12 @@ class Unpickler:
     dispatch[BINSTRING] = load_binstring
 
     def load_unicode(self):
-        self.append(unicode(self.readline()[:-1],'raw-unicode-escape'))
+        self.append(str(self.readline()[:-1],'raw-unicode-escape'))
     dispatch[UNICODE] = load_unicode
 
     def load_binunicode(self):
         len = mloads('i' + self.read(4))
-        self.append(unicode(self.read(len),'utf-8'))
+        self.append(str(self.read(len),'utf-8'))
     dispatch[BINUNICODE] = load_binunicode
 
     def load_short_binstring(self):
@@ -1073,9 +1074,9 @@ class Unpickler:
         if not instantiated:
             try:
                 value = klass(*args)
-            except TypeError, err:
-                raise TypeError, "in constructor for %s: %s" % (
-                    klass.__name__, str(err)), sys.exc_info()[2]
+            except TypeError as err:
+                raise TypeError("in constructor for %s: %s" % (
+                    klass.__name__, str(err))).with_traceback(sys.exc_info()[2])
         self.append(value)
 
     def load_inst(self):
@@ -1238,8 +1239,8 @@ class Unpickler:
             try:
                 d = inst.__dict__
                 try:
-                    for k, v in state.iteritems():
-                        d[intern(k)] = v
+                    for k, v in state.items():
+                        d[sys.intern(k)] = v
                 # keys in state don't have to be strings
                 # don't blow up, but don't go out of our way
                 except TypeError:
@@ -1255,10 +1256,10 @@ class Unpickler:
                 # .update() business, and always uses
                 #     PyObject_SetItem(inst.__dict__, key, value) in a
                 # loop over state.items().
-                for k, v in state.items():
+                for k, v in list(state.items()):
                     setattr(inst, k, v)
         if slotstate:
-            for k, v in slotstate.items():
+            for k, v in list(slotstate.items()):
                 setattr(inst, k, v)
     dispatch[BUILD] = load_build
 
@@ -1327,7 +1328,7 @@ def encode_long(x):
             # Extend to a full byte.
             nibbles += 1
         nbits = nibbles * 4
-        x += 1L << nbits
+        x += 1 << nbits
         assert x > 0
         ashex = hex(x)
         njunkchars = 2 + ashex.endswith('L')
@@ -1367,19 +1368,19 @@ def decode_long(data):
 
     nbytes = len(data)
     if nbytes == 0:
-        return 0L
+        return 0
     ashex = _binascii.hexlify(data[::-1])
-    n = long(ashex, 16) # quadratic time before Python 2.3; linear now
+    n = int(ashex, 16) # quadratic time before Python 2.3; linear now
     if data[-1] >= '\x80':
-        n -= 1L << (nbytes * 8)
+        n -= 1 << (nbytes * 8)
     return n
 
 # Shorthands
 
 try:
-    from cStringIO import StringIO
+    from io import StringIO
 except ImportError:
-    from StringIO import StringIO
+    from io import StringIO
 
 def dump(obj, file, protocol=None):
     Pickler(file, protocol).dump(obj)

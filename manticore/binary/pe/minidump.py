@@ -1,5 +1,5 @@
 import struct
-from StringIO import StringIO
+from six.moves import StringIO
 class Structure(object):
     def __init__(self):
         if not hasattr(self, "_fields_"):
@@ -44,7 +44,7 @@ class Structure(object):
             value = self.__struct_fields__[name]
             if type(value) == int:
                 return "0x%08x" % value
-            elif type(value) == long:
+            elif type(value) == int:
                 return "0x%016x" % value
             elif type(value) == str:
                 return repr(value)
@@ -623,7 +623,7 @@ class MiniDump(object):
             if not 7 in streams: raise Exception("No SYSTEM_INFO stream found...context will not work correctly!")
             
             # it is important we parse SYSTEM_INFO first
-            parse_order = streams.keys()
+            parse_order = list(streams.keys())
             parse_order.remove(7)
             parse_order = [7] + parse_order
             

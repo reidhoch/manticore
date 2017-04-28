@@ -1,3 +1,4 @@
+
 import itertools, struct
 
 class BinaryObject(object):
@@ -32,9 +33,9 @@ class BinaryObject(object):
                     slot = slot.split('[')[0]
                     try:
                         reps = int(reps)
-                    except Exception,e:
+                    except Exception as e:
                         reps = getattr(self, reps)
-            except Exception,e:
+            except Exception as e:
                 pass
 
             x = []
@@ -186,6 +187,6 @@ class Grr(BinaryObject):
 
 if __name__ == '__main__':
     import sys
-    mbb = Grr.from_buf(file(sys.argv[1]).read())
-    print mbb
+    mbb = Grr.from_buf(open(sys.argv[1]).read())
+    print(mbb)
 

@@ -1,3 +1,4 @@
+from six.moves import reduce
 from capstone import *
 from capstone.x86 import *
 from .abstractcpu import Cpu, RegisterFile, Operand, SANE_SIZES, instruction
@@ -12,6 +13,7 @@ from ..smtlib import *
 from ..memory import MemoryException
 from ...utils.helpers import issymbolic
 import logging
+from functools import reduce
 logger = logging.getLogger("CPU")
 
 
@@ -450,8 +452,8 @@ class AMD64RegFile(RegisterFile):
 
     @property
     def all_registers(self):
-        return tuple( self._table.keys() +
-                      ['FP0', 'FP1', 'FP2', 'FP3', 'FP4', 'FP5', 'FP6', 'FP7'] + ['EFLAGS', 'RFLAGS'] + self._aliases.keys() )
+        return tuple( list(self._table.keys()) +
+                      ['FP0', 'FP1', 'FP2', 'FP3', 'FP4', 'FP5', 'FP6', 'FP7'] + ['EFLAGS', 'RFLAGS'] + list(self._aliases.keys()) )
 
     @property
     def canonical_registers(self):
@@ -461,7 +463,7 @@ class AMD64RegFile(RegisterFile):
         return register in self.all_registers
 
     def _set_bv(self, register_id, register_size, offset, size, reset, value):
-        if isinstance(value, (int,long)):
+        if isinstance(value, int):
             # type error or forgiving?
             #if (value & ~((1<<size)-1)) != 0 :
             #    raise TypeError('Value bigger than register')
@@ -491,7 +493,7 @@ class AMD64RegFile(RegisterFile):
 
     def _set_flag(self, register_id, register_size, offset, size, reset, value):
         assert size == 1
-        if not isinstance(value, (bool, int, long, BitVec, Bool)):
+        if not isinstance(value, (bool, int, BitVec, Bool)):
             raise TypeError
         if isinstance(value, BitVec):
             if value.size != 1:
@@ -528,11 +530,11 @@ class AMD64RegFile(RegisterFile):
                                    BitVecConstant(register_size, 0))
 
         flags = []
-        for flag, offset in self._flags.iteritems():
+        for flag, offset in list(self._flags.items()):
             flags.append((self._registers[flag], offset))
 
         if any(issymbolic(flag) for flag, offset in flags):
-            res = reduce(operator.or_, map(make_symbolic, flags))
+            res = reduce(operator.or_, list(map(make_symbolic, flags)))
         else:
             res = 0
             for flag, offset in flags:
@@ -542,7 +544,7 @@ class AMD64RegFile(RegisterFile):
     def _set_flags(self, reg, res):
         ''' Set individual flags from a EFLAGS/RFLAGS value '''
         #assert sizeof (res) == 32 if reg == 'EFLAGS' else 64   
-        for flag, offset in self._flags.iteritems():
+        for flag, offset in list(self._flags.items()):
             self.write(flag, Operators.EXTRACT(res, offset, 1))
 
     def write(self, name, value):
@@ -1583,14 +1585,14 @@ class X86Cpu(Cpu):
         divisor = Operators.ZEXTEND(src.read(), size*2)
 
         #TODO make symbol friendly
-        if isinstance(divisor, (int,long)) and divisor == 0:
+        if isinstance(divisor, int) and divisor == 0:
             raise DivideError()
         quotient = Operators.UDIV(dividend, divisor)
 
         MASK = (1<<size)-1
 
         #TODO make symbol friendly
-        if isinstance(quotient, (int,long)) and quotient > MASK:
+        if isinstance(quotient, int) and quotient > MASK:
             raise DivideError()
         reminder = Operators.UREM(dividend, divisor)
 
@@ -1657,7 +1659,7 @@ class X86Cpu(Cpu):
 
 
         divisor = src.read()
-        if isinstance(divisor, (int,long)) and divisor == 0:
+        if isinstance(divisor, int) and divisor == 0:
             raise DivideError()
 
         dst_size = src.size * 2
@@ -1669,18 +1671,18 @@ class X86Cpu(Cpu):
         dividend_sign = (dividend & sign_mask ) != 0
         divisor_sign = (divisor & sign_mask) != 0
 
-        if isinstance(divisor, (int,long)):
+        if isinstance(divisor, int):
             if divisor_sign:
                 divisor = ( (~divisor)+1) & mask
                 divisor = -divisor
             
-        if isinstance(dividend, (int,long)):
+        if isinstance(dividend, int):
             if dividend_sign:
                 dividend = ( (~dividend)+1) & mask
                 dividend = -dividend
 
         quotient = Operators.SDIV(dividend, divisor)
-        if isinstance(dividend, (int,long)) and isinstance(dividend, (int,long)):
+        if isinstance(dividend, int) and isinstance(dividend, int):
             # handle the concrete case
             remainder = dividend - (quotient * divisor)
         else:
@@ -2057,7 +2059,7 @@ class X86Cpu(Cpu):
         '''
         parts = []
         arg0 = dest.read()
-        for i in xrange(0, dest.size, 8):
+        for i in range(0, dest.size, 8):
             parts.append(Operators.EXTRACT(arg0, i, 8))
 
         dest.write(Operators.CONCAT(8 * len(parts), *parts))
@@ -2535,7 +2537,7 @@ class X86Cpu(Cpu):
         size = dest.size
         arg0 = dest.read()
         temp = 0
-        for pos in xrange(0,size,8):
+        for pos in range(0,size,8):
             temp = (temp << 8) | (arg0&0xff)
             arg0 = arg0 >> 8
         dest.write(arg0)
@@ -3549,7 +3551,7 @@ class X86Cpu(Cpu):
 
         value = dest.read()
 
-        if isinstance(tempCount, (int, long)) and tempCount == 0:
+        if isinstance(tempCount, int) and tempCount == 0:
             #this is a no-op
             new_val = value
             dest.write(new_val)
@@ -3596,7 +3598,7 @@ class X86Cpu(Cpu):
         value = dest.read()
 
 
-        if type(tempCount) in (int, long) and tempCount == 0:
+        if type(tempCount) in (int, int) and tempCount == 0:
             #this is a no-op
             new_val = value
             dest.write(new_val)
@@ -3861,7 +3863,7 @@ class X86Cpu(Cpu):
         # count is masked based on destination size
         tempCount =  Operators.ZEXTEND(count.read(), OperandSize) & (OperandSize - 1)
 
-        if type(tempCount) in (int, long) and tempCount == 0:
+        if type(tempCount) in (int, int) and tempCount == 0:
             pass
         else:
             arg0 = dest.read()
@@ -3900,7 +3902,7 @@ class X86Cpu(Cpu):
         res = res & MASK
         dest.write(res)
 
-        if type(tempCount) in (int, long) and tempCount == 0:
+        if type(tempCount) in (int, int) and tempCount == 0:
             pass
         else:
             SIGN_MASK = 1<<(OperandSize-1)
@@ -3962,7 +3964,7 @@ class X86Cpu(Cpu):
         value = src.read()
         flag = Operators.EXTRACT(value, 0, 1) == 1
         res = 0
-        for pos in xrange(1, src.size):
+        for pos in range(1, src.size):
             res  = Operators.ITEBV(dest.size, flag, res, pos)
             flag = Operators.OR(flag, Operators.EXTRACT(value, pos, 1) == 1 )
 
@@ -4004,7 +4006,7 @@ class X86Cpu(Cpu):
         flag = Operators.EXTRACT(value, src.size-1, 1) == 1
         res = 0
 
-        for pos in reversed(xrange(0, src.size)):
+        for pos in reversed(list(range(0, src.size))):
             res = Operators.ITEBV(dest.size, flag, res, pos)
             flag = Operators.OR(flag,  (Operators.EXTRACT(value, pos, 1) == 1))
 
@@ -4602,7 +4604,7 @@ class X86Cpu(Cpu):
         arg1 = op1.read()
 
         res = 0
-        for pos in reversed(xrange(0, size/2, 8)):
+        for pos in reversed(list(range(0, size/2, 8))):
             byte0 = Operators.ZEXTEND( ( arg0 >> pos )& 0xff, size)
             byte1 = Operators.ZEXTEND( ( arg1 >> pos )& 0xff, size)
             res = res << 8
@@ -4629,7 +4631,7 @@ class X86Cpu(Cpu):
         arg1 = src.read()
 
         res = 0
-        for pos in reversed(xrange(0, size, 8)):
+        for pos in reversed(list(range(0, size, 8))):
             elem0 = Operators.ZEXTEND( ( arg0 >> pos )& 0xff, size)
             elem1 = Operators.ZEXTEND( ( arg1 >> pos )& 0xff, size)
             res = res << 8
@@ -4657,7 +4659,7 @@ class X86Cpu(Cpu):
         arg1 = src.read()
 
         res = 0
-        for pos in reversed(xrange(0, size/2, 8)):
+        for pos in reversed(list(range(0, size/2, 8))):
             elem0 = Operators.ZEXTEND( ( arg0 >> pos )& ((1 << size/2)-1), size)
             elem1 = Operators.ZEXTEND( ( arg1 >> pos )& ((1 << size/2)-1), size)
             res = res << (size/2)
@@ -4684,7 +4686,7 @@ class X86Cpu(Cpu):
         arg1 = src.read()
 
         res = 0
-        for pos in reversed(xrange(0, size/2, 8)):
+        for pos in reversed(list(range(0, size/2, 8))):
             elem0 = Operators.ZEXTEND( ( arg0 >> pos )& ((1 << size/2)-1), size)
             elem1 = Operators.ZEXTEND( ( arg1 >> pos )& ((1 << size/2)-1), size)
             res = res << (size/2)
@@ -4829,7 +4831,7 @@ class X86Cpu(Cpu):
         arg1 = op1.read()
         res = 0
 
-        for i in xrange(0,op0.size,8):
+        for i in range(0,op0.size,8):
             res = Operators.ITEBV(op0.size, Operators.EXTRACT(arg0, i, 8) == Operators.EXTRACT(arg1, i, 8), res | (0xff << i), res )
             #if (arg0>>i)&0xff == (arg1>>i)&0xff:
             #    res = res | (0xff << i)
@@ -4853,7 +4855,7 @@ class X86Cpu(Cpu):
         arg1 = op1.read()
 
         res = 0
-        for i in reversed(xrange(7,op1.size,8)):
+        for i in reversed(list(range(7,op1.size,8))):
             res = (res<<1) | ((arg1>>i)&1)
         op0.write(Operators.EXTRACT(res,0,op0.size))
 
@@ -5139,7 +5141,7 @@ class X86Cpu(Cpu):
         result = []
         value_a = dest.read()
         value_b = src.read()
-        for i in reversed(range(0,dest.size,8)):
+        for i in reversed(list(range(0,dest.size,8))):
             a = Operators.EXTRACT(value_a, i, 8)
             b = Operators.EXTRACT(value_b, i, 8)
             result.append((a-b)&0xff)
@@ -5567,7 +5569,7 @@ class X86Cpu(Cpu):
         value = src.read()
         flag = Operators.EXTRACT(value, 0, 1) == 1
         res = 0
-        for pos in xrange(1, src.size):
+        for pos in range(1, src.size):
             res  = Operators.ITEBV(dest.size, flag, res, pos)
             flag = Operators.OR(flag, Operators.EXTRACT(value, pos, 1) == 1 )
 
@@ -5646,12 +5648,12 @@ class ABI:
             Subroutine arguments are passed on the stack. 
             Integer values and memory addresses are returned in the EAX register
         '''
-        argcount = function.func_code.co_argcount - 1
+        argcount = function.__code__.co_argcount - 1
         assert argcount >= 0
         def cdecl_function(model):
             cpu = model.current
             base = cpu.STACK+4 #skip ret address
-            arguments = [ cpu.read_int(base + (i*4), 32) for i in xrange(argcount) ]
+            arguments = [ cpu.read_int(base + (i*4), 32) for i in range(argcount) ]
             try:
                 cpu.EAX = function(model, *arguments)
             except ConcretizeArgument as cae:
@@ -5670,13 +5672,13 @@ class ABI:
             Callee is responsible for cleaning up the stack.
             Return values are stored in the EAX register.
         '''
-        argcount = function.func_code.co_argcount - 1
+        argcount = function.__code__.co_argcount - 1
         assert argcount >= 0
         def stdcall_function(model):
             cpu = model.current
             # skip saved EIP on stack
             base = cpu.STACK+4
-            arguments = [ cpu.read_int(base+(pos*4), 32) for pos in xrange(argcount) ]
+            arguments = [ cpu.read_int(base+(pos*4), 32) for pos in range(argcount) ]
             try:
                 cpu.EAX = function(model, *arguments)
             except ConcretizeArgument as cae:
@@ -5706,7 +5708,7 @@ class ABI:
             Additional arguments are passed on the stack.
             Return value is stored in RAX.[16]:22
         '''
-        argcount = function.func_code.co_argcount - 1
+        argcount = function.__code__.co_argcount - 1
         assert argcount >= 0
         def argument(cpu):
             yield cpu.RDI
@@ -5721,7 +5723,7 @@ class ABI:
                 stack += 8
         def systemV_function(model):
             cpu = model.current
-            arguments = [ next(argument(cpu)) for _ in xrange(argcount) ]
+            arguments = [ next(argument(cpu)) for _ in range(argcount) ]
             cpu.RAX = function(cpu, *arguments)
             cpu.RIP = cpu.pop(64)
         return systemV_function

@@ -15,18 +15,19 @@ and common API.  interpreters? linkers? linked DLLs?
 
 '''
 
+
 class Binary(object):
     magics = { }
     def __new__(cls, path):
         if cls is Binary:
-            cl = cls.magics[file(path).read(4)]
+            cl = cls.magics[open(path).read(4)]
             return cl(path)
         else:
             return super(Binary, cls).__new__(cls, path)
 
     def __init__(self, path):
         self.path = path
-        self.magic = Binary.magics[file(path).read(4)]
+        self.magic = Binary.magics[open(path).read(4)]
 
     def arch(self):
         pass
@@ -40,7 +41,7 @@ class Binary(object):
 
 
 from elftools.elf.elffile import ELFFile
-import StringIO
+from six.moves import StringIO
 class CGCElf(Binary):
 
     @staticmethod
@@ -89,7 +90,7 @@ class CGCElf(Binary):
 class Elf(Binary):
     def __init__(self, filename):
         super(Elf, self).__init__(filename)
-        self.elf = ELFFile(file(filename)) 
+        self.elf = ELFFile(open(filename))
         self.arch = {'x86':'i386','x64':'amd64'}[self.elf.get_machine_arch()]
         assert self.elf.header.e_type in ['ET_DYN', 'ET_EXEC', 'ET_CORE']
 
@@ -130,11 +131,11 @@ class Elf(Binary):
     def threads(self):
         yield(('Running', {'EIP': self.elf.header.e_entry}))
 
-from grr.snapshot import Grr
+from .grr.snapshot import Grr
 class CGCGrr(Binary):
     def __init__(self, filename):
         HEADERSIZE = 16384
-        self.grr = Grr.from_buf(file(filename).read(HEADERSIZE))
+        self.grr = Grr.from_buf(open(filename).read(HEADERSIZE))
         self.arch = 'i386'
         assert ''.join(self.grr.magic) == 'GRRS'
         assert self.grr.exe_num <= 16
@@ -171,7 +172,7 @@ class CGCGrr(Binary):
                                       getattr(self.grr.fpregs.xmm_space, name).low
 
         #FPU
-        for i in xrange(8):
+        for i in range(8):
             registers['FP%d'%i] = ( getattr(self.grr.fpregs.st_space,'st%d'%i).mantissa, 
                                         getattr(self.grr.fpregs.st_space,'st%d'%i).exponent )
 
@@ -183,7 +184,7 @@ class Minidump(Binary):
         assert self.md.get_architecture() == "x86"
         self.arch = 'i386'
 
-        major, minor = map(int, self.md.version.split(' ')[0].split('.'))
+        major, minor = list(map(int, self.md.version.split(' ')[0].split('.')))
         if major == 6:
             self.flavor = "Windows7SP%d"%minor
         elif major == 10:
@@ -226,7 +227,7 @@ class Minidump(Binary):
                             'FS': cxt.SegFs}
 
             if (additional_context and 'registers' in additional_context):
-                for name, value in additional_context['registers'].iteritems():
+                for name, value in list(additional_context['registers'].items()):
                     registers[name]= value
             yield((status, registers))
 
@@ -241,7 +242,7 @@ Binary.magics= { '\x7fCGC': CGCElf,
 
 if __name__ == '__main__':
     import sys
-    print list(Binary(sys.argv[1]).threads())
-    print list(Binary(sys.argv[1]).maps())
+    print(list(Binary(sys.argv[1]).threads()))
+    print(list(Binary(sys.argv[1]).maps()))
 
 

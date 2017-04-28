@@ -1,6 +1,6 @@
 import fcntl
 
-import cgcrandom
+from . import cgcrandom
 import weakref
 import errno
 import os, struct
@@ -41,7 +41,7 @@ class File(object):
     def __init__(self, *args, **kwargs):
         #Todo: assert file is seekable otherwise we should save what was
         #read/write to the state
-        self.file = file(*args,**kwargs)
+        self.file = open(*args,**kwargs)
     def stat(self):
         return os.fstat(self.fileno())
     def ioctl(self, request, argp):
@@ -77,7 +77,7 @@ class File(object):
         name = state['name']
         mode = state['mode']
         pos = state['pos']
-        self.file = file(name, mode)
+        self.file = open(name, mode)
         self.seek(pos)
 
 class SymbolicFile(object):
@@ -170,7 +170,7 @@ class SymbolicFile(object):
         :rtype: int
         :return: the read/write file offset.
         '''
-        assert isinstance(pos, (int,long))
+        assert isinstance(pos, int)
         self.pos = pos
 
     def read(self, count):
@@ -183,7 +183,7 @@ class SymbolicFile(object):
             return []
         else:
             size = min(count,self.max_size-self.pos)
-            ret = [self.array[i] for i in xrange(self.pos,self.pos+size)]
+            ret = [self.array[i] for i in range(self.pos,self.pos+size)]
             self.pos+=size
             return ret
 
@@ -193,7 +193,7 @@ class SymbolicFile(object):
         '''
         for c in data:
             size = min(len(data),self.max_size-self.pos)
-            for i in xrange(self.pos,self.pos+size):
+            for i in range(self.pos,self.pos+size):
                 self.array[i] = data[i-self.pos]
 
 
@@ -239,7 +239,7 @@ class Socket(object):
     def receive(self, size):
         rx_bytes = min(size, len(self.buffer))
         ret = []
-        for i in xrange(rx_bytes):
+        for i in range(rx_bytes):
             ret.append(self.buffer.pop())
         return ret
 
@@ -303,7 +303,7 @@ class Linux(object):
 
         #Load process and setup socketpairs
         self.procs = []
-        arch = {'x86': 'i386', 'x64': 'amd64', 'ARM': 'armv7'}[ELFFile(file(program)).get_machine_arch()]
+        arch = {'x86': 'i386', 'x64': 'amd64', 'ARM': 'armv7'}[ELFFile(open(program)).get_machine_arch()]
         cpu = self._mk_proc(arch)
         self.load(cpu, program)
         self._arch_specific_init(cpu, arch)
@@ -316,14 +316,14 @@ class Linux(object):
         nprocs = len(self.procs)
         nfiles = len(self.files)
         assert nprocs > 0
-        self.running = range(nprocs)
+        self.running = list(range(nprocs))
         self._current = 0
 
         #Each process can wait for one timeout
         self.timers = [ None ] * nprocs
         #each fd has a waitlist
-        self.rwait = [set() for _ in xrange(nfiles)]
-        self.twait = [set() for _ in xrange(nfiles)]
+        self.rwait = [set() for _ in range(nfiles)]
+        self.twait = [set() for _ in range(nfiles)]
 
     def _mk_proc(self, arch):
         if arch in {'i386', 'armv7'}:
@@ -422,7 +422,7 @@ class Linux(object):
         :todo: FIX. move to cpu or memory 
         """
         filename = ""
-        for i in xrange(0,1024):
+        for i in range(0,1024):
             c = Operators.CHR(cpu.read_int(buf + i, 8))
             if c == '\x00':
                 break
@@ -511,7 +511,7 @@ class Linux(object):
     def load_vdso(self, bits):
         #load vdso #TODO or #IGNORE
         vdso_top = {32: 0x7fff0000, 64: 0x7fff00007fff0000}[bits]
-        vdso_size = len(file('vdso%2d.dump'%bits).read())
+        vdso_size = len(open('vdso%2d.dump'%bits).read())
         vdso_addr = self.memory.mmapFile(self.memory._floor(vdso_top - vdso_size),
                                      vdso_size, 'r x', 
                                      {32: 'vdso32.dump', 64: 'vdso64.dump'}[bits],
@@ -597,7 +597,7 @@ class Linux(object):
         #Put all auxv strings into the string stack area.
         #And replace the value be its pointer
 
-        for name, value in auxv.items():
+        for name, value in list(auxv.items()):
             if hasattr(value, '__len__'):
                 push_bytes(value)
                 auxv[name]=cpu.STACK
@@ -633,7 +633,7 @@ class Linux(object):
         #AT_NULL
         push_int(0)       
         push_int(0)       
-        for name, val in auxv.items():
+        for name, val in list(auxv.items()):
             push_int(val)
             push_int(auxvnames[name])
 
@@ -666,7 +666,7 @@ class Linux(object):
         '''
         #load elf See binfmt_elf.c
         #read the ELF object file
-        elf = ELFFile(file(filename))
+        elf = ELFFile(open(filename))
         arch = {'x86':'i386','x64':'amd64', 'ARM': 'armv7'}[elf.get_machine_arch()]
         addressbitsize = {'x86':32, 'x64':64, 'ARM': 32}[elf.get_machine_arch()]
         logger.debug("Loading %s as a %s elf"%(filename,arch))
@@ -678,7 +678,7 @@ class Linux(object):
         for elf_segment in elf.iter_segments():
             if elf_segment.header.p_type != 'PT_INTERP':
                 continue
-            interpreter = ELFFile(file(elf_segment.data()[:-1]))
+            interpreter = ELFFile(open(elf_segment.data()[:-1]))
             break
         if not interpreter is None:
             assert interpreter.get_machine_arch() == elf.get_machine_arch()
@@ -851,7 +851,7 @@ class Linux(object):
             cpu.memory.mprotect(cpu.memory._floor(elf_bss), elf_brk-elf_bss, 'rw ')
 	    try:
 	        cpu.memory[elf_bss:elf_brk] = '\x00'*(elf_brk-elf_bss)
-	    except Exception, e:
+	    except Exception as e:
 	        logger.debug("Exception zeroing Interpreter fractional pages: %s"%str(e))
             #TODO #FIXME mprotect as it was before zeroing?
 
@@ -1055,7 +1055,7 @@ class Linux(object):
             - C{-1} if the calling process can not access the file in the desired mode.
         '''
         filename = ""
-        for i in xrange(0,255):
+        for i in range(0,255):
             c = Operators.CHR(cpu.read_int(buf + i, 8))
             if c == '\x00':
                 break
@@ -1157,7 +1157,7 @@ class Linux(object):
             mode = { os.O_RDWR: 'r+', os.O_RDONLY: 'r', os.O_WRONLY: 'w' }[flags&7]
             f = File(filename, mode) #todo modes, flags
             logger.debug("Opening file %s for %s real fd %d",filename, mode, f.fileno())
-        except Exception,e:
+        except Exception as e:
             logger.info("Could not open file %s. Reason %s"%(filename,str(e)))
             return -1
         if filename in self.symbolic_files:
@@ -1300,12 +1300,12 @@ class Linux(object):
         :return: the amount of bytes written in total.
         '''
         total = 0
-        for i in xrange(0, count):
+        for i in range(0, count):
             buf = cpu.read_int(iov + i * 16, 64)
             size = cpu.read_int(iov + i * 16 + 8, 64)
 
             data = ""
-            for j in xrange(0,size):
+            for j in range(0,size):
                 data += Operators.CHR(cpu.read_int(buf + j, 8))
             logger.debug("WRITEV(%r, %r, %r) -> <%r> (size:%r)"%(fd, buf, size, data, len(data)))
             self.files[fd].write(data)
@@ -1325,12 +1325,12 @@ class Linux(object):
         :return: the amount of bytes written in total.
         '''
         total = 0
-        for i in xrange(0, count):
+        for i in range(0, count):
             buf = cpu.read_int(iov + i * 8, 32)
             size = cpu.read_int(iov + i * 8 + 4, 32)
 
             data = ""
-            for j in xrange(0,size):
+            for j in range(0,size):
                 data += Operators.CHR(cpu.read_int(buf + j, 8))
                 self.files[fd].write(Operators.CHR(cpu.read_int(buf + j, 8)))
             logger.debug("WRITEV(%r, %r, %r) -> <%r> (size:%r)"%(fd, buf, size, data, len(data)))
@@ -1500,9 +1500,9 @@ class Linux(object):
             raise SyscallNotImplemented(64, index)
         func = syscalls[index]
 
-        logger.debug("SYSCALL64: %s %r ", func.func_name
-                                    , arguments[:func.func_code.co_argcount])
-        nargs = func.func_code.co_argcount
+        logger.debug("SYSCALL64: %s %r ", func.__name__
+                                    , arguments[:func.__code__.co_argcount])
+        nargs = func.__code__.co_argcount
         args = [ cpu ] + arguments
 
         result = func(*args[:nargs-1])
@@ -1555,9 +1555,9 @@ class Linux(object):
             raise SyscallNotImplemented(64, index)
         func = syscalls[index]
 
-        logger.debug("int80: %s %r ", func.func_name
-                                    , arguments[:func.func_code.co_argcount])
-        nargs = func.func_code.co_argcount
+        logger.debug("int80: %s %r ", func.__name__
+                                    , arguments[:func.__code__.co_argcount])
+        nargs = func.__code__.co_argcount
         args = [ cpu ] + arguments
 
         result = func(*args[:nargs-1])
@@ -1596,7 +1596,7 @@ class Linux(object):
             logger.debug("None running checking if there is some process waiting for a timeout")
             if all([x is None for x in self.timers]):
                 raise Deadlock()
-            self.clocks = min(filter(lambda x: x is not None, self.timers))+1
+            self.clocks = min([x for x in self.timers if x is not None])+1
             self.check_timers()
             assert len(self.running) != 0, "DEADLOCK!"
             self._current = self.running[0]
@@ -1677,7 +1677,7 @@ class Linux(object):
         ''' Awake process if timer has expired '''
         if self._current is None :
             #Advance the clocks. Go to future!!
-            advance = min([self.clocks] + filter(lambda x: x is not None, self.timers)) +1
+            advance = min([self.clocks] + [x for x in self.timers if x is not None]) +1
             logger.debug("Advancing the clock from %d to %d", self.clocks, advance)
             self.clocks = advance
         for procid in range(len(self.timers)):
@@ -1702,12 +1702,12 @@ class Linux(object):
             if self.clocks % 10000 == 0:
                 self.check_timers()
                 self.sched()
-        except Interruption, e:
+        except Interruption as e:
             try:
                 syscallret = self.int80(self.current)
             except RestartSyscall:
                 pass
-        except Syscall, e:
+        except Syscall as e:
             try:
                 syscallret = self.syscall(self.current)
             except RestartSyscall:
@@ -1823,7 +1823,7 @@ class Linux(object):
                 'DS': 0x2b,
                 'ES': 0x2b,
             }
-            for reg, val in x86_defaults.iteritems():
+            for reg, val in list(x86_defaults.items()):
                 cpu.regfile.write(reg, val)
 
     @staticmethod
@@ -1835,7 +1835,7 @@ class Linux(object):
         :return: total load size of interpreter, not aligned
         :rtype: int
         '''
-        load_segs = filter(lambda x: x.header.p_type == 'PT_LOAD', interp.iter_segments())
+        load_segs = [x for x in interp.iter_segments() if x.header.p_type == 'PT_LOAD']
         last = load_segs[-1]
         return last.header.p_vaddr + last.header.p_memsz
 
@@ -1888,7 +1888,7 @@ class SLinux(Linux):
     def syscall(self, cpu):
         try:
             return super(SLinux, self).syscall(cpu)
-        except SymbolicSyscallArgument, e:
+        except SymbolicSyscallArgument as e:
             cpu.PC = cpu.PC - cpu.instruction.size
             reg_name = self.syscall_arg_regs[e.reg_num]
             raise ConcretizeRegister(reg_name,e.message,e.policy)
@@ -1896,7 +1896,7 @@ class SLinux(Linux):
     def int80(self, cpu):
         try:
             return super(SLinux, self).int80(cpu)
-        except SymbolicSyscallArgument, e:
+        except SymbolicSyscallArgument as e:
             cpu.PC = cpu.PC - cpu.instruction.size
             reg_name = self.syscall_arg_regs[e.reg_num]
             raise ConcretizeRegister(reg_name,e.message,e.policy)
@@ -2060,7 +2060,7 @@ class DecreeEmu(object):
 
     @staticmethod
     def cgc_random(model, buf, count, rnd_bytes):
-        import cgcrandom
+        from . import cgcrandom
         if issymbolic(buf):
             logger.info("Ask to write random bytes to a symbolic buffer")
             raise ConcretizeArgument(0)
@@ -2074,7 +2074,7 @@ class DecreeEmu(object):
             raise ConcretizeArgument(2)
 
         data = []
-        for i in xrange(count):
+        for i in range(count):
             value = cgcrandom.stream[DecreeEmu.RANDOM]
             data.append(value)
             DecreeEmu.random += 1

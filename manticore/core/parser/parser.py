@@ -1,4 +1,6 @@
 # Minimal INTEL assembler expression calculator
+
+from six.moves import input
 import ply.yacc as yacc
 import copy,struct
 from ..smtlib import Operators,Bool
@@ -110,7 +112,7 @@ t_ignore  = ' \t'
 
 # Error handling rule
 def t_error(t):
-    print "Illegal character '%s'" % t.value[0]
+    print("Illegal character '%s'" % t.value[0])
     t.lexer.skip(1)
 
 # Build the lexer
@@ -193,7 +195,7 @@ def p_expression_deref(p):
     size = sizes[p[1]]
     address = p[4]
     char_list = functions['read_memory'](address, size)
-    value = Operators.CONCAT(8 * len(char_list), *reversed(map(Operators.ORD, char_list)))
+    value = Operators.CONCAT(8 * len(char_list), *reversed(list(map(Operators.ORD, char_list))))
     p[0] = value
 
 def p_expression_derefseg(p):
@@ -204,7 +206,7 @@ def p_expression_derefseg(p):
     base, limit, _ = functions['get_descriptor'](seg)
     address = base + address
     char_list = functions['read_memory'](address, size)
-    value = Operators.CONCAT(8 * len(char_list), *reversed(map(Operators.ORD, char_list)))
+    value = Operators.CONCAT(8 * len(char_list), *reversed(list(map(Operators.ORD, char_list))))
     p[0] = value
 
 def p_expression_term(p):
@@ -262,7 +264,7 @@ def p_expression_ge(p):
 
 # Error rule for syntax errors
 def p_error(p):
-    print "Syntax error in input:",p
+    print("Syntax error in input:",p)
 
 # Build the parser
 
@@ -272,17 +274,17 @@ parser = yacc.yacc(debug=0, write_tables=0)
 def parse(expression,read_memory=None,read_register=None,get_descriptor=None,word_size=32):
     global functions, sizes
 
-    if read_memory != None:
+    if read_memory is not None:
         functions['read_memory'] = read_memory
     else:
         functions['read_memory'] = default_read_memory
 
-    if read_register != None:
+    if read_register is not None:
         functions['read_register'] = read_register
     else:
         functions['read_register'] = default_read_register
 
-    if get_descriptor != None:
+    if get_descriptor is not None:
         functions['get_descriptor'] = get_descriptor
     else:
         functions['get_descriptor'] = default_get_descriptor
@@ -303,10 +305,10 @@ def parse(expression,read_memory=None,read_register=None,get_descriptor=None,wor
 if __name__ == '__main__':
     while True:
        try:
-           s = raw_input('calc > ')
+           s = eval(input('calc > '))
        except EOFError:
            break
        if not s: continue
        result = parse(s)
-       print result
+       print(result)
 

@@ -160,7 +160,7 @@ class State(object):
             size = len(data)
             symb = self.constraints.new_array(name=label, index_max=size)
             self.input_symbols.append(symb)
-            for j in xrange(size):
+            for j in range(size):
                 if data[j] != wildcard:
                     symb[j] = data[j]
             data = [symb[i] for i in range(size)]
